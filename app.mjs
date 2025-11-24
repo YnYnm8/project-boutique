@@ -138,6 +138,7 @@ async function main() {
             res.status(500).json(new DTO("Erreur"));
         }
     });
+
     // Route Put-Product By Id
     app.put("/product/:id", async (req, res) => {
 
@@ -212,9 +213,69 @@ async function main() {
         }
     });
 
+    app.put("/category/:id", async (req, res) => {
+
+        const categoryId = req.params.id;
+        const newCategoryData = req.body;
+
+        try {
+            const [updated] = await Category.update({
+                title: newCategoryData.title,
+               
+            }, {
+                where: { id: categoryId }
+            });
+
+            if (!updated) {
+                return res.status(404).json({ error: "Produit non trouvé" });
+            }
+            const updatedCategory = await Category.findByPk(categoryId);
+            return res.json(updatedCategory);
+        } catch (error) {
+            res.status(500).json({ error: "Erreur serveur" });
+        }
+    });
+
+    
+
     app.post("/category", async (req, res) => {
-        const
-    })
+       
+        const newaCategoryData = req.body;
+
+        try {
+            const newaCategory = await Cate.create({
+                title: newProductData.title,
+                
+            });
+
+            res.json("Category ajouté");
+
+        } catch (error) {
+            res.status(500).json({ error: "Erreur lors de la création de la tâche" });
+        }
+    });  
+         
+  app.delete("/category/:categoryId", async (req, res) => {
+
+        try {
+            const categoryId = req.params.categoryId;
+            const userRole = req.user.role;
+
+            if (userRole !== "admin") {
+                return res.json("Vous n'avez pas le droit pour effectuer cette action");
+            }
+
+            await Category.destroy({
+                where: { id: categoryId }
+            });
+
+            return res.json("Category supprimé")
+
+        } catch (error) {
+            res.status(500).json(new DTO("Erreur"));
+        }
+    });
+
     // << !! Middleware pour protection des routes !! >>
     app.use(isLoggedInJWT(User));
 
@@ -237,21 +298,28 @@ async function main() {
     });
 
     // Route Put-Review
-    app.post("/posts/:postId/comments", async (req, res) => {
-        const newCommentData = req.body;
-        const postId = req.params.postId;
+    app.put("/product/review", async (req, res) => {
+
+        const productId = req.params.id;
+        const newProductData = req.body;
 
         try {
-            const newComment = await Comment.create({
-                content: newCommentData.content,
-                UserId: req.userId,
-                PostId: postId
+            const [updated] = await Product.update({
+                name: newProductData.name,
+                price: newProductData.price,
+                description: newProductData.description,
+                category_id: 1
+            }, {
+                where: { id: productId }
             });
 
-            res.json("Commentaire ajouté");
-
+            if (!updated) {
+                return res.status(404).json({ error: "Produit non trouvé" });
+            }
+            const updatedProduct = await Product.findByPk(productId);
+            return res.json(updatedProduct);
         } catch (error) {
-            res.status(500).json({ error: "Erreur lors de la création de la tâche" });
+            res.status(500).json({ error: "Erreur serveur" });
         }
     });
 
