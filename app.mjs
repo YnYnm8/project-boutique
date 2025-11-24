@@ -11,18 +11,20 @@ async function main() {
     const sequelize = await loadSequelize();
     const app = express();
 
+    // Table (model)
     const User = sequelize.models.User;
-    const Product = sequelize.models.Product;
-    const Review = sequelize.models.Review;
-    const Image = sequelize.models.Image;
     const Category = sequelize.models.Category;
+    const Product = sequelize.models.Product;
+    const Image = sequelize.models.Image;
+    const Review = sequelize.models.Review;
 
+    // Clé secrète
     const JWT_SECRET = 'votre_cle_secrete_pour_jwt';
 
-    app.use(express.json());
     app.use(cookieParser());
+    app.use(express.json());
 
-    // Route Register
+    // Post-Register
     app.post('/register', async (req, res) => {
         const { name, email, phone_number, birth_date, password, verifiedPassword } = req.body;
 
@@ -50,7 +52,7 @@ async function main() {
         }
     });
 
-    // Route Login
+    // Post-Login
     app.post('/login', async (req, res) => {
         const { email, password } = req.body;
 
@@ -76,7 +78,7 @@ async function main() {
         }
     });
 
-    // Route All-Products
+    // Get-All-Products
     app.get("/products", async (req, res) => {
         try {
 
@@ -88,7 +90,7 @@ async function main() {
         }
     });
 
-    // Route Product-By Id
+    // Get-Product-By-Id
     app.get("/product/:id", async (req, res) => {
         try {
             const productId = req.params.id;
@@ -99,72 +101,125 @@ async function main() {
         }
     });
 
-
-    app.post("/product", async (req, res) => {
-        const newProductData = req.body;
-
+    //Get-All-Categories
+    app.get("/categories", async (req, res) => {
         try {
-            const newProduct = await Product.create({
-                name: newProductData.name,
-                price: newProductData.price,
-                description: newProductData.description,
-                category_id: 1
-            });
-
-            res.json("Produit ajouté");
+            const allCategories = await Category.findAll();
+            res.json(allCategories);
 
         } catch (error) {
-            res.status(500).json({ error: "Erreur lors de la création de la tâche" });
+            res.status(500).json(new DTO("Error"))
         }
     });
 
-    app.delete("/product/:productId", async (req, res) => {
+    // Get-Category-By-Id
+    app.get("/category/:categoryId", async (req, res) => {
+
+        const category_id = req.params.categoryId;
 
         try {
-            const productId = req.params.productId;
-            const userRole = req.user.role;
+            const category = await Category.findOne({ where: { id: category_id } });
+            res.json(category)
+
+        } catch (error) {
+            res.status(500).json(new DTO("Error"))
+        }
+    });
+
+    // Get-All-Reviews
+    app.get("/reviews", async (req, res) => {
+        try {
+            const allReviews = await Review.findAll();
+            res.json(allReviews);
+
+        } catch (error) {
+            res.status(500).json(new DTO("Error"))
+        }
+    });
+
+    // << !! Middleware pour protection des routes !! >>
+    app.use(isLoggedInJWT(User));
+
+
+    // LOGOUT
+    app.post("/logout", async (req, res) => {
+        res.clearCookie("token");
+        res.json({ message: "Logout!" })
+    });
+
+    // Post-Review
+    app.post("/review", async (req, res) => {
+
+        const newReviewData = req.body;
+
+        try {
+            const newReview = await Review.create({
+                content: newReviewData.content,
+                UserId: req.userId
+            });
+
+            res.json(newReview);
+
+        } catch (error) {
+            res.status(500).json({ error: "Erreur lors de la création de la Review" });
+        }
+    });
+
+    // Put-Review-By-Id ** vraiment utile ?
+    app.put("/review/:reviewId", async (req, res) => {
+
+        const reviewId = req.params.reviewId;
+        const newReviewData = req.body;
+        const updateData = {};
+
+        try {
+            if (newReviewData.rating !== undefined) {
+                updateData.rating = newReviewData.rating;
+            }
+            if (newReviewData.content !== undefined) {
+                updateData.content = newReviewData.content;
+            }
+
+            const [updated] = await Review.update(updateData, {
+                where: { id: reviewId }
+            });
+
+            if (!updated) {
+                return res.status(404).json({ error: "Review non trouvée" });
+            }
+            const updatedReview = await Review.findByPk(reviewId);
+
+            return res.json(updatedReview);
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ error: "Erreur serveur" });
+        }
+    });
+
+    // Delete-Review-By-Id
+    app.delete("/review/:reviewId", async (req, res) => {
+
+        try {
+            const reviewId = req.params.reviewId;
+            const userRole = req.userRole;
 
             if (userRole !== "admin") {
                 return res.json("Vous n'avez pas le droit pour effectuer cette action");
             }
 
-            await Product.destroy({
-                where: { id: productId }
+            await Review.destroy({
+                where: { id: reviewId }
             });
 
-            return res.json("Product supprimé")
+            return res.json("Review supprimée")
 
         } catch (error) {
             res.status(500).json(new DTO("Erreur"));
         }
     });
 
-    // Route Put-Product By Id
-    app.put("/product/:id", async (req, res) => {
-
-        const productId = req.params.id;
-        const newProductData = req.body;
-
-        try {
-            const [updated] = await Product.update({
-                name: newProductData.name,
-                price: newProductData.price,
-                description: newProductData.description,
-                category_id: 1
-            }, {
-                where: { id: productId }
-            });
-
-            if (!updated) {
-                return res.status(404).json({ error: "Produit non trouvé" });
-            }
-            const updatedProduct = await Product.findByPk(productId);
-            return res.json(updatedProduct);
-        } catch (error) {
-            res.status(500).json({ error: "Erreur serveur" });
-        }
-    });
-
+    // Get-User-By-Id
     app.get("/user/:id", async (req, res) => {
         try {
             const userId = req.params.id;
@@ -176,8 +231,37 @@ async function main() {
         }
     });
 
+    // Put-User
+    app.put("/user/:id", async (req, res) => {
+
+        const userId = req.params.id;
+        const newUserData = req.body;
+
+        try {
+            const [updated] = await User.update(
+                {
+                    name: newUserData.name,
+                    password: newUserData.password,
+                    email: newUserData.email,
+                    birth_date: newUserData.birth_date
+                }, {
+                where: { id: userId }
+            });
+
+            if (!updated) {
+                return res.status(404).json({ error: "Utilisateur non trouvé" });
+            }
+            const updatedUser = await User.findByPk(userId);
+            return res.json(updatedUser);
+        } catch (error) {
+            res.status(500).json({ error: "Erreur serveur" });
+        }
+    });
 
 
+    // << ROUTE ADMIN >> //
+
+    // Get-All-Users
     app.get("/users", async (req, res) => {
         try {
             const users = await User.findAll();
@@ -188,31 +272,25 @@ async function main() {
         }
     });
 
-    app.get("/categories", async (req, res) => {
-        try {
+    // CATEGORY
+    // Post-Category
+    app.post("/category", async (req, res) => {
 
-            const allCategories = await Category.findAll();
-            res.json(allCategories);
+        const newCategoryData = req.body;
+
+        try {
+            const newCategory = await Cate.create({
+                title: newCategoryData.title
+            });
+
+            res.json(newCategory);
 
         } catch (error) {
-            res.status(500).json(new DTO("Error"))
+            res.status(500).json({ error: "Erreur lors de la création de la tâche" });
         }
     });
 
-    // Route Get-Category By Id
-    app.get("/category/:categoryId", async (req, res) => {
-        try {
-
-            const category_id = req.params.categoryId;
-
-            const category = await Category.findOne({ where: { id: category_id } });
-            res.json(category)
-
-        } catch (error) {
-            res.status(500).json(new DTO("Error"))
-        }
-    });
-
+    // Put-Category-By-Id
     app.put("/category/:id", async (req, res) => {
 
         const categoryId = req.params.id;
@@ -221,7 +299,7 @@ async function main() {
         try {
             const [updated] = await Category.update({
                 title: newCategoryData.title,
-               
+
             }, {
                 where: { id: categoryId }
             });
@@ -236,30 +314,12 @@ async function main() {
         }
     });
 
-    
-
-    app.post("/category", async (req, res) => {
-       
-        const newaCategoryData = req.body;
-
-        try {
-            const newaCategory = await Cate.create({
-                title: newProductData.title,
-                
-            });
-
-            res.json("Category ajouté");
-
-        } catch (error) {
-            res.status(500).json({ error: "Erreur lors de la création de la tâche" });
-        }
-    });  
-         
-  app.delete("/category/:categoryId", async (req, res) => {
+    // Delete-Category-By-Id
+    app.delete("/category/:categoryId", async (req, res) => {
 
         try {
             const categoryId = req.params.categoryId;
-            const userRole = req.user.role;
+            const userRole = req.userRole;
 
             if (userRole !== "admin") {
                 return res.json("Vous n'avez pas le droit pour effectuer cette action");
@@ -276,153 +336,93 @@ async function main() {
         }
     });
 
-    // << !! Middleware pour protection des routes !! >>
-    app.use(isLoggedInJWT(User));
+    // Product
+    // Post-Product
+    app.post("/product", async (req, res) => {
 
-
-    // Route Add-Review
-    app.post("/review", async (req, res) => {
-        const newReviewData = req.body;
-
-        try {
-            const newReview = await Review.create({
-                content: newReviewData.content,
-                UserId: req.user.id
-            });
-
-            res.json(newReview);
-
-        } catch (error) {
-            res.status(500).json({ error: "Erreur lors de la création de la Review" });
-        }
-    });
-
-    // Route Put-Review
-    app.put("/product/review", async (req, res) => {
-
-        const productId = req.params.id;
         const newProductData = req.body;
 
         try {
-            const [updated] = await Product.update({
+            const newProduct = await Product.create({
                 name: newProductData.name,
                 price: newProductData.price,
                 description: newProductData.description,
-                category_id: 1
-            }, {
-                where: { id: productId }
+                category_id: newProductData.description || 1
             });
 
-            if (!updated) {
-                return res.status(404).json({ error: "Produit non trouvé" });
-            }
-            const updatedProduct = await Product.findByPk(productId);
-            return res.json(updatedProduct);
+            res.json({
+                message: "Produit ajouté avec succès",
+                product: newProduct
+            });
+
         } catch (error) {
-            res.status(500).json({ error: "Erreur serveur" });
+            res.status(500).json({ error: "Erreur lors de la création du produit" });
         }
     });
 
+    // Put-Product By Id
+    app.put("/product/:productId", async (req, res) => {
 
-    // ---------------------------
-    // DELETE : Supprimer un post
-    // ---------------------------
-    // FR : Seul l’auteur ou l’admin peut supprimer un post.
-    // JP : 投稿の削除は本人または管理者のみ可能。
-    app.delete("/posts/:postid", async (req, res) => {
+        const productId = req.params.productId;
+        const newProductData = req.body;
+        const updateData = {};
 
         try {
-            const postId = req.params.postid;
-            const userRole = req.user.role;
-            const userId = req.userId;
-
-            if (userId !== postId && userRole !== "admin") {
-                return res.json("Vous n'avez pas le droit pour supprimer ce commentaire");
+            if (newProductData.name !== undefined) {
+                updateData.name = newProductData.name;
+            }
+            if (newProductData.price !== undefined) {
+                updateData.price = newProductData.price;
+            }
+            if (newProductData.description !== undefined) {
+                updateData.description = newProductData.description;
+            }
+            if (newProductData.category_id !== undefined) {
+                updateData.category_id = newProductData.category_id;
             }
 
-            await Post.destroy({
-                where: { id: postId }
+            const [updated] = await Product.update(updateData, {
+                where: { id: productId }
             });
 
-            return res.json("Post supprimé")
+            if (!updated) { return res.status(404).json({ error: "Produit non trouvé" }); }
+
+            const updatedProduct = await Product.findByPk(productId);
+
+            return res.json(updatedProduct);
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).json({ error: "Erreur serveur" });
+        }
+    });
+
+    // Delete-Product-By-Id
+    app.delete("/product/:productId", async (req, res) => {
+
+        try {
+            const productId = req.params.productId;
+            const userRole = req.userRole;
+
+            if (userRole !== "admin") {
+                return res.json("Vous n'avez pas le droit pour effectuer cette action");
+            }
+
+            await Product.destroy({
+                where: { id: productId }
+            });
+
+            return res.json("Product supprimé")
 
         } catch (error) {
             res.status(500).json(new DTO("Erreur"));
         }
     });
 
-
-    // ---------------------------
-    // DELETE : Supprimer un commentaire
-    // ---------------------------
-    // FR : Seul l’auteur ou l’admin peut supprimer un commentaire.
-    // JP : コメントの削除は本人か管理者のみ可能。
-    app.delete("/comments/:commentId", async (req, res) => {
-
-        try {
-            const userId = req.userId;
-            const userRole = req.user.role;
-            const commentId = req.params.commentId;
-
-            const comment = await Comment.findOne({
-                where: { id: commentId }
-            });
-
-            const userCommentId = comment.UserId;
-
-            if (userId !== userCommentId && userRole !== "admin") {
-                return res.json({ message: "Vous n'avez pas le droit pour supprimer ce commentaire" });
-            }
-
-            await Comment.destroy({
-                where: { id: commentId }
-            });
-
-            return res.json({ message: "Comment supprimé" });
-
-        } catch (error) {
-            res.status(500).json({ error: "Erreur" });
-        }
+    // Serveur
+    app.listen(3000, "0.0.0", () => {
+        console.log("Serveur démarré sur http://localhost:3000");
     });
-
-    // Route Put-User
-    app.put("/user/:id", async (req, res) => {
-
-        const userId = req.params.id;
-        const newUserData = req.body;
-
-        try {
-            const [updated] = await User.update(
-                {
-                    name: newUserData.name,
-                    password: newUserData.password,
-                    email: newUserData.email,
-                    birth_date: newUserData.birth_date
-                },
-                {
-                    where: { id: userId }
-                }
-            );
-
-            if (!updated) {
-                return res.status(404).json({ error: "Utilisateur non trouvé" });
-            }
-
-            // Récupérer l’utilisateur mis à jour
-            const updatedUser = await User.findByPk(userId);
-
-            return res.json(updatedUser);
-        } catch (error) {
-            res.status(500).json({ error: "Erreur serveur" });
-        }
-    });
-
-    // Route LOGOUT
-    app.post("/logout", async (req, res) => {
-        res.clearCookie("token");
-        res.json({ message: "Logout!" })
-    });
-
 
     // Middleware : Vérification JWT
     function isLoggedInJWT(UserModel) {
@@ -450,15 +450,13 @@ async function main() {
         }
     }
 
-    // Serveur
-    app.listen(3000, "0.0.0", () => {
-        console.log("Serveur démarré sur http://localhost:3000");
-    });
 }
 
 main();
 
 
+// FR : Objet utilisé pour structurer les réponses JSON.
+// JP : JSON レスポンスを統一フォーマット化するための DTO。
 class DTO {
     message;
     data = null;
@@ -467,5 +465,3 @@ class DTO {
         this.data = data;
     }
 }
-// FR : Objet utilisé pour structurer les réponses JSON.
-// JP : JSON レスポンスを統一フォーマット化するための DTO。

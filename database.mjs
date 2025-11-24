@@ -1,9 +1,6 @@
-import { Sequelize, DataTypes, DATE, STRING } from "sequelize";
+import { Sequelize, DataTypes } from "sequelize";
 import bcrypt from "bcrypt";
-/**
- * 
- * @returns {Promise<Sequelize>}
- */
+
 export async function loadSequelize() {
     try {
 
@@ -12,6 +9,7 @@ export async function loadSequelize() {
             username: "root",
             password: "root"
         };
+
         const sequelize = new Sequelize(login.database, login.username, login.password, {
             host: '127.0.0.1',
             port: 3306,
@@ -52,9 +50,6 @@ export async function loadSequelize() {
             }
         });
 
-
-
-
         const Cart = sequelize.define("Cart");
 
         const Review = sequelize.define("Review", {
@@ -62,13 +57,12 @@ export async function loadSequelize() {
             content: DataTypes.STRING
         });
 
-
         const Product = sequelize.define("Product", {
             name: DataTypes.STRING,
             price: DataTypes.FLOAT,
             description: DataTypes.STRING
-
         });
+
         const Category = sequelize.define("Category", {
             title: DataTypes.STRING
         });
@@ -84,7 +78,6 @@ export async function loadSequelize() {
 
         const CaracProduct = sequelize.define("CaracProduct", {
             value: DataTypes.STRING
-
         });
 
 
@@ -129,13 +122,7 @@ export async function loadSequelize() {
         });
 
 
-
-
-
-
-
         await sequelize.sync({ force: true });
-
 
 
         const userOne = await User.create({
@@ -247,9 +234,6 @@ export async function loadSequelize() {
         ]);
 
         console.log("SEED des bento ajouté !");
-
-
-
 
         return sequelize;
 
