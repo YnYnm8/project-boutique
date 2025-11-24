@@ -1,75 +1,40 @@
 import { loadSequelize } from "./database.mjs";
-// FR : Importation de la fonction pour charger Sequelize et les modèles.
-// JP : Sequelize とモデルを読み込む関数のインポート。
-
 import express from "express";
-// FR : Framework utilisé pour créer l’API REST.
-// JP : REST API を作成するためのフレームワーク。
-
 import jwt from "jsonwebtoken";
-// FR : Librairie permettant de créer et vérifier des JWT.
-// JP : JWT を作成・検証するライブラリ。
-
 import cookieParser from 'cookie-parser';
-// FR : Middleware pour lire les cookies envoyés par le client.
-// JP : クライアントから送られるクッキーを読み取るミドルウェア。
-
 import cors from "cors";
-// FR : Middleware CORS (non utilisé dans ce code).
-// JP : CORS ミドルウェア（このコードでは使用していない）。
-
 import bcrypt from "bcrypt";
-// FR : Sert à hasher et vérifier les mots de passe.
-// JP : パスワードのハッシュ化・比較に使われる。
+
 
 async function main() {
 
     const sequelize = await loadSequelize();
-    // FR : Chargement de Sequelize et accès aux modèles.
-    // JP : Sequelize をロードしモデルへアクセス。
+    const app = express();
 
     const User = sequelize.models.User;
+    const Product = sequelize.models.Product;
+    const Review = sequelize.models.Review;
+    const Image = sequelize.models.Image;
+    const Category = sequelize.models.Category;
 
-    // FR : Récupération des modèles User, Post, Comment.
-    // JP : User / Post / Comment モデルを取得。
-
-
-    const app = express();
-    // FR : Création de l’application Express.
-    // JP : Express アプリを作成。
+    const JWT_SECRET = 'votre_cle_secrete_pour_jwt';
 
     app.use(express.json());
-    // FR : Permet à Express de lire les JSON du body des requêtes.
-    // JP : リクエスト body の JSON を読み取れるようにする。
-
     app.use(cookieParser());
-    // FR : Permet d’accéder aux cookies via req.cookies.
-    // JP : req.cookies でクッキーを読み取れるようにする。
 
-
-    // ---------------------------
-    // REGISTER : Inscription
-    // ---------------------------
-    // FR : Route permettant l'inscription d'un utilisateur.
-    // JP : ユーザー登録用のルート。
+    // Route Register
     app.post('/register', async (req, res) => {
         const { name, email, phone_number, birth_date, password, verifiedPassword } = req.body;
 
         if (!name || !email || !phone_number || !birth_date || !password || !verifiedPassword) {
-            // FR : Vérifie que tous les champs obligatoires sont fournis.
-            // JP : すべての必須項目が入力されているかチェック。
             return res.status(400).json(new DTO('Tous les champs sont obligatoires'));
         }
 
         if (password !== verifiedPassword) {
-            // FR : Vérifie que les deux mots de passe correspondent.
-            // JP : パスワードが一致しているかチェック。
             return res.status(400).json(new DTO('Passwords do not match'));
         }
 
         try {
-            // FR : Création d’un nouvel utilisateur.
-            // JP : 新しいユーザーを作成。
             const newUser = await User.create({ name, email, phone_number, birth_date, password });
             console.log(newUser);
             res.status(201).json({
@@ -81,61 +46,123 @@ async function main() {
             });
 
         } catch (error) {
-            // FR : Erreur lors de l’insertion DB.
-            // JP : DB 登録中にエラーが発生した場合。
             res.status(500).json({ message: 'Error registering user', error: error.message });
         }
     });
 
-
-    // ---------------------------
-    // LOGIN : Connexion
-    // ---------------------------
-    const JWT_SECRET = 'votre_cle_secrete_pour_jwt';
-    // FR : Clé servant à signer le JWT (à changer en production).
-    // JP : JWT 署名に使う秘密鍵（本番では変更すべき）。
-
+    // Route Login
     app.post('/login', async (req, res) => {
         const { email, password } = req.body;
 
         if (!email || !password) {
-            // FR : Champs requis non fournis.
-            // JP : 必須項目が未入力。
             return res.status(400).json(new DTO('Email and password are required'));
         }
-
         try {
-            // FR : Recherche de l'utilisateur via l'email.
-            // JP : メールアドレスでユーザーを検索。
             const user = await User.findOne({ where: { email } });
             const isPasswordTheSame = bcrypt.compareSync(password, user.password);
 
             if (!user || !isPasswordTheSame) {
-                // FR : Identifiants invalides.
-                // JP : ログイン情報が正しくない。
                 return res.status(401).json(new DTO('Invalid email or password'));
             }
 
-            // FR : Création du JWT (valable 1 heure).
-            // JP : JWT を 1 時間有効で作成。
-            const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
+            const token = jwt.sign({ userId: user.id, userRole: user.role }, JWT_SECRET, { expiresIn: '1h' });
 
-            // FR : Stockage du token dans un cookie sécurisé.
-            // JP : トークンを HTTP-only クッキーに保存。
             res.cookie('token', token, { httpOnly: true });
 
-            // FR : Succès.
-            // JP : ログイン成功。
             res.json({ message: 'Login successful' });
 
         } catch (error) {
-            // FR : Erreur serveur interne.
-            // JP : サーバー内部エラー。
             res.status(500).json(new DTO('Error logging in'));
         }
     });
 
+    // Route All-Products
+    app.get("/products", async (req, res) => {
+        try {
 
+            const allProducts = await Product.findAll();
+            res.json(allProducts);
+
+        } catch (error) {
+            res.status(500).json(new DTO("Error"))
+        }
+    });
+
+    // Route Product-By Id
+    app.get("/product/:id", async (req, res) => {
+        try {
+            const productId = req.params.id;
+            const product = await Product.findByPk(productId);
+            res.json(product);
+        } catch (error) {
+            res.status(500).json(new DTO("Error"))
+        }
+    });
+
+
+    app.post("/product", async (req, res) => {
+        const newProductData = req.body;
+
+        try {
+            const newProduct = await Product.create({
+                name: newProductData.name,
+                price: newProductData.price,
+                description: newProductData.description,
+                category_id: 1
+            });
+
+            res.json("Produit ajouté");
+
+        } catch (error) {
+            res.status(500).json({ error: "Erreur lors de la création de la tâche" });
+        }
+    });
+
+    app.delete("/product/:productId", async (req, res) => {
+
+        try {
+            const productId = req.params.productId;
+            const userRole = req.user.role;
+
+            if (userRole !== "admin") {
+                return res.json("Vous n'avez pas le droit pour effectuer cette action");
+            }
+
+            await Product.destroy({
+                where: { id: productId }
+            });
+
+            return res.json("Product supprimé")
+
+        } catch (error) {
+            res.status(500).json(new DTO("Erreur"));
+        }
+    });
+    // Route Put-Product By Id
+    app.put("/product/:id", async (req, res) => {
+
+        const productId = req.params.id;
+        const newProductData = req.body;
+
+        try {
+            const [updated] = await Product.update({
+                name: newProductData.name,
+                price: newProductData.price,
+                description: newProductData.description,
+                category_id: 1
+            }, {
+                where: { id: productId }
+            });
+
+            if (!updated) {
+                return res.status(404).json({ error: "Produit non trouvé" });
+            }
+            const updatedProduct = await Product.findByPk(productId);
+            return res.json(updatedProduct);
+        } catch (error) {
+            res.status(500).json({ error: "Erreur serveur" });
+        }
+    });
 
     app.get("/user/:id", async (req, res) => {
         try {
@@ -159,73 +186,57 @@ async function main() {
             res.status(500).json(new DTO("Error"));
         }
     });
-    app.put("/user/:id", async (req, res) => {
-        const userId = req.params.id;
-        const newUserData = req.body;
 
+    app.get("/categories", async (req, res) => {
         try {
-            const [updated] = await User.update(
-                {
-                    name: newUserData.name,
-                    password: newUserData.password,
-                    email: newUserData.email,
-                    birth_date: newUserData.birth_date
-                },
-                {
-                    where: { id: userId }
-                }
-            );
 
-            if (!updated) {
-                return res.status(404).json({ error: "Utilisateur non trouvé" });
-            }
+            const allCategories = await Category.findAll();
+            res.json(allCategories);
 
-            // Récupérer l’utilisateur mis à jour
-            const updatedUser = await User.findByPk(userId);
-
-            return res.json(updatedUser);
         } catch (error) {
-            res.status(500).json({ error: "Erreur serveur" });
+            res.status(500).json(new DTO("Error"))
         }
     });
 
+    // Route Get-Category By Id
+    app.get("/category/:categoryId", async (req, res) => {
+        try {
 
-    // ---------------------------
-    // Middleware d’authentification JWT
-    // ---------------------------
-    // FR : Vérifie si le token est valide avant les routes protégées.
-    // JP : 保護されたルートの前に JWT の有効性をチェック。
+            const category_id = req.params.categoryId;
+
+            const category = await Category.findOne({ where: { id: category_id } });
+            res.json(category)
+
+        } catch (error) {
+            res.status(500).json(new DTO("Error"))
+        }
+    });
+
+    app.post("/category", async (req, res) => {
+        const
+    })
+    // << !! Middleware pour protection des routes !! >>
     app.use(isLoggedInJWT(User));
 
 
-    // ---------------------------
-    // POST : Création d’un post
-    // ---------------------------
-    // FR : Ajout d’un nouveau post.
-    // JP : 新しい投稿を作成。
-    app.post("/posts", async (req, res) => {
-        const newPostData = req.body;
+    // Route Add-Review
+    app.post("/review", async (req, res) => {
+        const newReviewData = req.body;
 
         try {
-            const newPost = await Post.create({
-                title: newPostData.title,
-                content: newPostData.content,
+            const newReview = await Review.create({
+                content: newReviewData.content,
                 UserId: req.user.id
             });
 
-            res.json("Route en cours.....")
+            res.json(newReview);
 
         } catch (error) {
-            res.status(500).json({ error: "Erreur lors de la création de la tâche" });
+            res.status(500).json({ error: "Erreur lors de la création de la Review" });
         }
     });
 
-
-    // ---------------------------
-    // POST : Ajouter un commentaire
-    // ---------------------------
-    // FR : Ajoute un commentaire à un post.
-    // JP : 投稿にコメントを追加。
+    // Route Put-Review
     app.post("/posts/:postId/comments", async (req, res) => {
         const newCommentData = req.body;
         const postId = req.params.postId;
@@ -306,23 +317,46 @@ async function main() {
         }
     });
 
+    // Route Put-User
+    app.put("/user/:id", async (req, res) => {
 
-    // ---------------------------
-    // LOGOUT
-    // ---------------------------
-    // FR : Supprime le cookie et déconnecte l’utilisateur.
-    // JP : Cookie を削除しログアウトさせる。
+        const userId = req.params.id;
+        const newUserData = req.body;
+
+        try {
+            const [updated] = await User.update(
+                {
+                    name: newUserData.name,
+                    password: newUserData.password,
+                    email: newUserData.email,
+                    birth_date: newUserData.birth_date
+                },
+                {
+                    where: { id: userId }
+                }
+            );
+
+            if (!updated) {
+                return res.status(404).json({ error: "Utilisateur non trouvé" });
+            }
+
+            // Récupérer l’utilisateur mis à jour
+            const updatedUser = await User.findByPk(userId);
+
+            return res.json(updatedUser);
+        } catch (error) {
+            res.status(500).json({ error: "Erreur serveur" });
+        }
+    });
+
+    // Route LOGOUT
     app.post("/logout", async (req, res) => {
         res.clearCookie("token");
         res.json({ message: "Logout!" })
     });
 
 
-    // ---------------------------
     // Middleware : Vérification JWT
-    // ---------------------------
-    // FR : Vérifie le token, récupère l'utilisateur et attache req.user.
-    // JP : トークンを検証し、ユーザー情報を req.user に追加。
     function isLoggedInJWT(UserModel) {
         return async (req, res, next) => {
             const token = req.cookies.token;
@@ -332,6 +366,7 @@ async function main() {
             try {
                 const decoded = jwt.verify(token, JWT_SECRET);
                 req.userId = decoded.userId;
+                req.userRole = decoded.userRole;
 
                 req.user = await UserModel.findByPk(req.userId);
 
@@ -347,20 +382,13 @@ async function main() {
         }
     }
 
-
-    // ---------------------------
     // Serveur
-    // ---------------------------
-    // FR : Démarre l’application.
-    // JP : サーバーを起動。
-    app.listen(3000, () => {
+    app.listen(3000, "0.0.0", () => {
         console.log("Serveur démarré sur http://localhost:3000");
     });
 }
 
 main();
-// FR : Lance l’application.
-// JP : アプリを起動。
 
 
 class DTO {
