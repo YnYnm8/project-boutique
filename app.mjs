@@ -347,7 +347,7 @@ async function main() {
                 name: newProductData.name,
                 price: newProductData.price,
                 description: newProductData.description,
-                category_id: newProductData.description || 1
+                category_id: newProductData.category_id || 1
             });
 
             res.json({
@@ -420,7 +420,7 @@ async function main() {
     });
 
     // Serveur
-    app.listen(3000, "0.0.0", () => {
+    app.listen(3000, "0.0.0.0", () => {
         console.log("Serveur démarré sur http://localhost:3000");
     });
 
